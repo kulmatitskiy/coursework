@@ -35,15 +35,19 @@ def twitter_request(url, http_method, parameters):
     return response
 
 
-def stream_tweets(track_list, max_tweets=5000):
+def stream_tweets_to_file(filename, track_list, max_tweets=5000):
     url = "https://stream.twitter.com/1.1/statuses/filter.json"
 
     parameters = {"track": ",".join(track_list)}
     response = twitter_request(url, "GET", parameters)
 
     line_count = 0
+    f = open(filename, "w")
     for line in response:
         line_count += 1
-        print line.strip()
+        #print line.strip()
+        f.write(line.strip())
+        f.write("\n")
         if line_count >= max_tweets:
+            f.close() 
             exit()

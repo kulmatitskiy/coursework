@@ -1,4 +1,4 @@
-from twitter_stream import stream_tweets
+from twitter_stream import stream_tweets_to_file
 
 def save_to_file(lines, filename):
     file = open(filename, "w")
@@ -15,4 +15,4 @@ if __name__ == '__main__':
            "AmericanDadTBS", "ArcherFX", "BasketsFX", "SHO_Homeland", "LastWeekTonight",
            "WorkaholicsCC"]
     save_to_file(shows, 'shows.txt')
-    stream_tweets(shows)
+    stream_tweets_to_file('tweets.json', shows)

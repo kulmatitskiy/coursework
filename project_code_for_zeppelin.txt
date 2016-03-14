@@ -1,0 +1,171 @@
+%pyspark
+shows = sc.textFile("/tmp/shows.txt")
+print("\n".join(shows.collect()))
+
+%pyspark
+tweets = sc.textFile("/tmp/twitter_shows.txt")
+print("\n".join(tweets.take(3)))
+
+%pyspark
+#Tweets are messy!
+import json
+from pprint import pprint
+#due to JSON error read the file with the json function which skips the tweets with "unicode" errors
+def decode_json(line):
+    try:
+        return [json.loads(line)]
+    except ValueError:
+        return []
+tweets_full = tweets.flatMap(decode_json)
+pprint(tweets_full.take(1))
+
+%pyspark
+#for our analysis only relevant keys are "author" in 'user', "text" and "hashtag" in "entities"
+clean_tweets = tweets.flatMap(decode_json).map(lambda j: {"author":j["user"], "text":j["text"], "entities":j['entities']})
+pprint(clean_tweets.take(1))
+
+tweets_full = tweets.flatMap(decode_json)
+#however we will keep the whole info allowing us to extend the analysis in the future, i.e. we will be working wit "tweets_full"
+
+%pyspark
+tweetsTagRDD = tweets_full.flatMap(lambda tweet: [(hashtag['text'].lower(), tweet) for hashtag in tweet['entities']['hashtags']])
+print tweetsTagRDD.take(10)
+pprint(tweetsTagRDD.count())
+
+
+%pyspark
+#now filter the tweets by removing the tweets authored by the show account
+tweetsTagAuthorRDD = tweetsTagRDD.filter(lambda (tag, tweet): (tag != tweet['user']['screen_name'].lower()))
+print tweetsTagAuthorRDD.take(5)
+print tweetsTagAuthorRDD.count()
+
+%pyspark
+#count the numbers of tweets related to the tags
+tweetsGroupTagRDD = tweetsTagAuthorRDD.map(lambda (tag, tweet): (tag, 1)).reduceByKey(lambda a, b: a + b)
+print tweetsGroupTagRDD.count()
+pprint(tweetsGroupTagRDD.take(10))
+
+%pyspark
+#keep only tweets with the hashtags of interest i.e. those in the show file
+#create first an RDD with (shows, 1) first
+tweetsGroupShowsRDD = shows.map(lambda x: (x.lower(), 1)).leftOuterJoin(tweetsGroupTagRDD).map(lambda (tag, comb): (tag, comb[1]))
+print tweetsGroupShowsRDD.take(10)
+print tweetsGroupShowsRDD.count()
+#Note that some of the counts are None - set this to zero instead
+tweetsGroupShowsNumRDD = tweetsGroupShowsRDD.map(lambda x: (x[0], x[1]) if x[1]  else (x[0], 0))
+pprint(tweetsGroupShowsNumRDD.takeOrdered(40, key=lambda x: -x[1]))
+
+%pyspark 
+#carry out some basic sentiment analysis
+#first create a bag of words from each tweet: keep the results as a tuple of (hastag, bag-of-words) pairs
+import re
+#split the text into the words
+pattern_split = re.compile(r"\W+")
+tweetsTextRDD = tweetsTagAuthorRDD.map(lambda (tag, tweet): (tag, pattern_split.split(tweet['text'].lower())))
+pprint(tweetsTextRDD.take(5))
+
+%pyspark
+#GET THE MOST FREQUENT WORDS FOR A GIVEN SHOW
+#group the tweets by hashtag
+#look only the top 5 most popular shows or so - in this example only one and count the number of individual words
+name = 'thesimpsons'
+pop1 = tweetsTextRDD.filter(lambda (tag, words): tag == name).flatMap(lambda (tag, words): words)
+pop1c = pop1.map(lambda x: (x,1)).reduceByKey(lambda a,b:a+b)
+pop1cSort = pop1c.map(lambda x: (x[1],x[0])).sortByKey(False)
+print pop1.take(10)
+pprint(pop1c.take(10))
+pprint(pop1cSort.take(10))
+
+%pyspark
+#CHECK THE SENTIMENT OF THE WORDS IN A TWEET
+#for this I will use the additional file with the calculated sentiment
+#the file is tab separated 
+#and clean a bit the file
+sentiment = sc.textFile("/tmp/AFINN-111.txt").map(lambda x:x.split('\t')).filter(lambda x: len(x) == 2).map(lambda x:(x[0],x[1]))
+pprint(sentiment.take(10))
+print sentiment.count()
+
+%pyspark
+#in the next step join this RDD with the words counted in the tweet for a given show
+pop1SentRDD = pop1c.join(sentiment)
+pprint(pop1SentRDD.take(10))
+#the result is in the form of tuples (word, (count_of_words, sentiment_mark))
+#in the next step count the sentiment by multiplying the count_of_words with the sentiment
+#the counts and marks need to be treted as numbers/floats
+pop1SentMultRDD = pop1SentRDD.map(lambda (a,b): (a, float(b[0])*float(b[1])))
+pprint(pop1SentMultRDD.take(10))
+#to get the final score/sentiment add all these values
+pop1Final = pop1SentMultRDD.map(lambda x: (name, x[1])).reduceByKey(lambda a,b: a+b).collect()
+pprint(pop1Final)
+
+
+%pyspark
+#repeat the same analysis for all shows with number of tweets > 0
+#identify only the shows with at least one tweet
+showsWithTweetsRDD = tweetsGroupShowsNumRDD.sortBy(lambda x: -x[1]).filter(lambda x: x[1] > 0)
+pprint(showsWithTweetsRDD.count())
+#there are 23 such shows
+showswith = showsWithTweetsRDD.collect()
+pprint(showswith)
+
+%pyspark
+#for these 23 shows run the sentiment analysis
+#1
+#first count the number of different words for a given shows
+def wordc(show):
+    pop = tweetsTextRDD.filter(lambda (tag, words): tag == show).flatMap(lambda (tag, words): words)
+    popc = pop.map(lambda x: (x,1)).reduceByKey(lambda a,b:a+b)
+    popcSort = popc.map(lambda x: (x[1],x[0])).sortByKey(False) #.collect()
+    return(popcSort)
+
+#2
+#then join this RDD with the words counted in the tweet for a given show with the file with the measured sentiment for the words
+#the result is in the form of tuples (word, (count_of_words, sentiment_mark))
+
+#3
+#in the next step count the sentiment by multiplying the count_of_words with the sentiment
+#the counts and marks need to be treted as numbers/floats
+summary = []
+
+for show in showswith:
+    print show[0]
+    frwordsRDD = wordc(show[0])
+    #pprint(frwordsRDD.take(10))
+    popSentRDD = frwordsRDD.map(lambda (a,b):(b,a)).join(sentiment)
+    popSentMultRDD = popSentRDD.map(lambda (a,b): (a, float(b[0])*float(b[1])))
+    #pprint(popSentMultRDD.take(10))
+    #one could do here a PLOT/HISTOGRAM of postive/negative words as an example
+    #to get the final score/sentiment add all these values
+    popFinal = popSentMultRDD.map(lambda x: (sh
+    pprint(popFinal.take(10))
+    summary.append(popFinal.collect())
+
+pprint(summary)
+#pprint(frwordsRDD)
+#results.saveAsTextFile("/tmp/myoutput.txt")
+
+%md
+One can see that sentiment analysis could be carried out only for 19 shows.
+We can further divide the obtained scores in different groups according to this sentiment 
+
+%pyspark
+#keep only the shows with measured sentiment
+#sort them by sentiment
+sentRDD = sc.parallelize(summary).filter(lambda a: len(a) > 0).map(lambda x: x[0])
+sentSortRDD = sentRDD.sortBy(lambda x: -x[1])
+pprint(sentSortRDD.take(20))
+
+%pyspark
+#lets compare these results with the number of tweets - i.e. get the sentiment divided y the number of tweets
+#join the last RDD with the RDD containing number of tweets per show
+sentandnRDD = sentSortRDD.join(tweetsGroupShowsNumRDD)
+#the resulting tuples (show, (n1, n2)) where n1 is the sentiment, n2 is the number of tweets
+pprint(sentandnRDD.take(20))
+
+
+%pyspark
+#as the final step calculate the sentiment normalised by the number of tweets
+#and sort by this normalised sentiment
+sentNormRDD = sentandnRDD.map(lambda (a,b): (a,(b[0]/b[1]))).sortBy(lambda x: -x[1])
+pprint(sentNormRDD.collect())
+

@@ -1,8 +1,8 @@
-## Explanation for work on real-time tweet sentiment analysis:
+### real-time tweet sentiment analysis
 
 _Note: Before I got started with this work, I did this [tutorial](http://hortonworks.com/hadoop-tutorial/how-to-refine-and-visualize-sentiment-data/#configure-and-start-solr)_
 
-*Setup*
+**Setup**
 
 1. Create new directories and upload files to hdfs
 
@@ -22,7 +22,7 @@ d. new directory /project/rawdata
 
 5. Install required packages for python (oauth2, requests, etc)
 
-*Components*
+**Components**
 
 1. Python script to stream tweets to HDFS (stream_to_hdfs.py)
    - This script will get tweets every 30 seconds and save each tweet to a file in /project/rawdata
@@ -40,7 +40,7 @@ d. new directory /project/rawdata
 4. Solr+Banana
    - Open file "TV Show Sentiment - Time Series-1458052996356" - this is the dashboard for the visualization
 
-*To Run*
+**To Run**
 
 Using command line:
 
@@ -55,7 +55,8 @@ $ cd coursework
 $ spark-submit ./readstream.py
 ```
 
-*To Stop*
+**To Stop**
+
 `ctrl-C`
 
 See our work in action:

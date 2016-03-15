@@ -42,8 +42,7 @@ d. new directory /project/rawdata
 
 *To Run*
 
-Using command line:
-
+In ssh:
 ```
 $ cd coursework
 $ spark-submit ./stream_to_hdfs.py
@@ -54,9 +53,6 @@ In a separate session,
 $ cd coursework
 $ spark-submit ./readstream.py
 ```
-
-*To Stop*
-`ctrl-C`
 
 See our work in action:
 https://www.youtube.com/watch?v=KKV7KqaKA6s

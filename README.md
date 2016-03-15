@@ -6,13 +6,10 @@ _Note: Before I got started with this work, I did this [tutorial](http://hortonw
 
 1. Create new directories and upload files to hdfs
 
-a. /project/twitter_credentials.json
-
-b. /data/dictionary.tsv
-
-c. /data/shows.txt
-
-d. new directory /project/rawdata
+ - /project/twitter_credentials.json
+ - /data/dictionary.tsv
+ - /data/shows.txt
+ - new directory /project/rawdata
 
 2. Follow tutorial to start solr and start ntpd service
 
